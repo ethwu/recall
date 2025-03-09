@@ -26,14 +26,14 @@ def cosine_similarity(a, b):
 
 def pack(path: Path, o: Any) -> None:
     path = Path(path)
-    with path.with_suffix(".npy").open("wb") as f:
+    with path.with_suffix(".pickle").open("wb") as f:
         pickle.dump(o, f, pickle.HIGHEST_PROTOCOL)
 
 
 def unpack_or_load[T](path: Path | PathLike, callback: Callable[[Path], T]) -> T:
     """Unpack an archive, or generate one if it doesn't exist."""
     path = Path(path)
-    pickled_path = path.with_suffix(".npy")
+    pickled_path = path.with_suffix(".pickle")
     if pickled_path.exists():
         try:
             with pickled_path.open("rb") as f:
@@ -61,7 +61,7 @@ class Conversation:
         embedding_model: str,
         language_model: str,
     ):
-        self.vector_db: dict[Chunk, Embedding]
+        self.vector_db: dict[Chunk, Embedding] = {}
         self.embedding_model = embedding_model
         self.language_model = language_model
 
@@ -72,6 +72,7 @@ class Conversation:
         """Get an embedding for the given text."""
         logger.debug("Generating an embedding for {!r}.", text)
         embedding = ollama.embed(model=self.embedding_model, input=text)
+        logger.debug("Got {!r}", embedding.embeddings)
         return (
             []
             if embedding is None or "embeddings" not in embedding
@@ -101,17 +102,13 @@ class Conversation:
         # Get the embedding for the query.
         query = self.embedding(query)
         logger.info("{}", len(self.vector_db))
-        return (
-            [
-                (
-                    chunk,
-                    # Calculate the similarities.
-                    cosine_similarity(query, embedding),
-                )
-                for chunk, embedding in self.vector_db.items()
-            ].sort(key=lambda x: x[1], reverse=True)
-            or []
-        )[:count]
+        logger.debug("Got embedding {!r}", query)
+        similarities = [
+            (chunk, cosine_similarity(query, embedding))
+            for chunk, embedding in self.vector_db.items()
+        ]
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        return similarities[:count]
 
     def ask(self, question: str) -> Generator[str, None, None]:
         """Get the answer to the given question."""
@@ -159,16 +156,16 @@ class Conversation:
         logger.info("Compacting the history...")
         compacted = ollama.chat(
             model=self.language_model,
-            messages=[
+            messages=self.context
+            + [
                 Message(
                     role="user",
                     content="Summarize the above interactions between yourself (the agent) and the user. "
                     "Retain as much information as possible. "
                     "Keep the summary brief. "
-                    "Frame the summary as notes to yourself:",
+                    "Frame the summary as notes to yourself.",
                 ),
-            ]
-            + self.context,
+            ],
             stream=False,
         )
         compacted.message.role = "system"

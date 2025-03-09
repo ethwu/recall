@@ -1,3 +1,5 @@
+import logging
+import sys
 from typing import Annotated
 
 from loguru import logger
@@ -28,7 +30,9 @@ def chat(
     """Run the chat."""
     logger.remove()
     if not quiet:
-        logger.add("recall.log", rotation="1 MB", retention="10 days")
+        logger.add(
+            "recall.log", level=logging.DEBUG, rotation="1 GB", retention="15 minutes"
+        )
     interface = Interface(
         embedding_model=embedding_model, language_model=language_model
     )

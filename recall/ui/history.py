@@ -32,13 +32,14 @@ class ChatHistory(VerticalScroll):
         """Update the message with the given identifier."""
         if text is None:
             return
-        self.query_one(f"#message-{identifier}").add_text(text)
+        message = self.query_one(f"#message-{identifier}")
+        message.add_text(text)
+        message.anchor()
 
 
 class Message(Markdown):
     def __init__(self, role: str, identifier: int, message: str):
         super().__init__(message, id=f"message-{identifier}")
-        self.BORDER_TITLE = role
         self.role = role
         self.message = message
 

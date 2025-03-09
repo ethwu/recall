@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import sys
 
 import textual
 from textual.app import App, ComposeResult
@@ -76,6 +77,8 @@ class Interface(App):
     @textual.on(Input.Submitted)
     async def submit_query(self, event: Input.Submitted):
         """Handle a query from the user."""
+        if not event.value:
+            return
         self.chat_history.add_message("User", event.value)
         response = await self.response(event.value).wait()
         self.chat_history.add_message("Agent", response)

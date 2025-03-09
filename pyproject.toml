@@ -9,7 +9,7 @@ dependencies = [
     "numpy>=2.2.3",
     "ollama>=0.4.7",
     "textual>=2.1.2",
-    "typer>=0.15.2",
+    "typer-slim>=0.15.2",
 ]
 
 [dependency-groups]

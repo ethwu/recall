@@ -1,4 +1,4 @@
 
 ChatHistory {
-    height: 100%;
+    vertical: bottom;
 }

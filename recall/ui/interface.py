@@ -22,6 +22,27 @@ class LoadingScreen(Screen):
 class Interface(App):
     """The user interface for the chat."""
 
+    AUTO_FOCUS = "ChatInput"
+
+    CSS = """
+    Prompt {
+        background: $primary 10%;
+        color: $text;
+        margin: 1;
+        margin-right: 8;
+        padding: 1 2 0 2;
+    }
+
+    Response {
+        border: wide $success;
+        background: $success 10%;
+        color: $text;
+        margin: 1;
+        margin-left: 8;
+        padding: 1 2 0 2;
+    }
+    """
+
     def __init__(self, embedding_model: EmbeddingModel, language_model: LanguageModel):
         super().__init__()
         self.convo = Conversation(
@@ -44,7 +65,7 @@ class Interface(App):
     @textual.work(thread=True)
     async def prepare(self) -> None:
         """Finish initializing the application in a separate thread."""
-        self.convo.load_dataset(knowledge.load_dataset("cats.txt"))
+        self.convo.load_dataset("cats.txt")
         self.call_from_thread(self.pop_screen)
 
     def compose(self) -> ComposeResult:

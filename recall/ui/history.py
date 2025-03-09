@@ -8,25 +8,37 @@ class ChatHistory(VerticalScroll):
 
     def __init__(self):
         super().__init__()
+        self.styles.align_vertical = "bottom"
         self.current_id = 0
 
-    CSS_PATH = Path("styles", "chat_history.tcss")
-
-    def add_message(self, role: str, message: str = "") -> int:
+    def add_message(self, role: str, message: str | None = "") -> int:
         """Add a message to the history."""
+        if message is None:
+            return
         identifier = self.current_id
-        self.mount(Message(role, identifier, message))
+        match role:
+            case "User":
+                message = Prompt(role, identifier, message)
+            case "Agent":
+                message = Response(role, identifier, message)
+            case _:
+                message = Message(role, identifier, message)
+        self.mount(message)
+        message.anchor()
         self.current_id += 1
         return identifier
 
     def update_message(self, identifier: int, text: str | None):
         """Update the message with the given identifier."""
+        if text is None:
+            return
         self.query_one(f"#message-{identifier}").add_text(text)
 
 
 class Message(Markdown):
     def __init__(self, role: str, identifier: int, message: str):
-        super().__init__(f"**{role}**: {message}", id=f"message-{identifier}")
+        super().__init__(message, id=f"message-{identifier}")
+        self.BORDER_TITLE = role
         self.role = role
         self.message = message
 
@@ -35,4 +47,12 @@ class Message(Markdown):
         if text is None:
             return
         self.message += text
-        self.update(f"**{self.role}**: {self.message}")
+        self.update(self.message)
+
+
+class Prompt(Message):
+    pass
+
+
+class Response(Message):
+    BORDER_TITLE = "Assistant"

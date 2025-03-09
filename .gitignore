@@ -1,5 +1,7 @@
 # Log files
 *.log
+# Packed serialized data
+*.pickle
 
 # Python-generated files
 __pycache__/

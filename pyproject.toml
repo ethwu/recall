@@ -3,6 +3,7 @@ name = "recall"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.13"
 dependencies = [
     "chromadb>=0.6.3",
@@ -12,10 +13,15 @@ dependencies = [
     "ollama>=0.4.7",
     "textual>=2.1.2",
     "typer-slim>=0.15.2",
+    "unstructured[md]>=0.14.8",
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.9.10", "textual-dev>=1.7.0"]
+dev = [
+    "nuitka>=2.6.7",
+    "ruff>=0.9.10",
+ "textual-dev>=1.7.0",
+]
 
 [tool.ruff]
 target-version = "py313"

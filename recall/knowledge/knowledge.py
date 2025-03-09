@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from recall.knowledge.types import Chunk, Dataset, Embedding
 
 HISTORY_SIZE_THRESHOLD = 128
+SAVE_HISTORY_THRESHOLD = 4
 RETAIN_EXCHANGES = 12
 
 
@@ -53,10 +54,12 @@ class Conversation:
 
     def __init__(
         self,
+        name: str,
         *,
         embedding_model: str,
         language_model: str,
     ):
+        self.name = name
         self.vector_db: VectorDb
         self.embedding_model = embedding_model
         self.language_model = language_model
@@ -66,7 +69,9 @@ class Conversation:
 
     def load_dataset(self, dataset_path: PathLike):
         """Load the given dataset."""
-        self.vector_db = VectorDb.from_path(dataset_path, self.embedding_model)
+        self.vector_db = VectorDb(dataset_path.name, self.embedding_model).with_dir(
+            dataset_path
+        )
         logger.info("Vector database loaded.")
 
     def ask(self, question: str) -> Generator[str, None, None]:
@@ -84,7 +89,9 @@ class Conversation:
         instructions = (
             "You are an unbiased research assistant. "
             "Respond to the question using the following context. "
-            "Do not make up any new information: "
+            "If you do not know the answer, do not invent an answer. "
+            "Keep your response to a couple sentences. "
+            "Do not invent any new information unless specifically requested: "
             # ) + "\n".join([f" - {chunk}" for chunk in knowledge])
         ) + "\n".join([f" - {chunk}" for chunk, _similarity in knowledge])
         logger.debug("Submitting request.")
@@ -104,6 +111,8 @@ class Conversation:
             yield chunk.message.content
         self.context.append(Message(role="assistant", content=response))
         self.messageno += 1
+        if self.messageno % SAVE_HISTORY_THRESHOLD:
+            pack(Path(self.name + ".history"), self.context)
         if self.messageno > HISTORY_SIZE_THRESHOLD:
             self.compact_history()
             self.messageno %= HISTORY_SIZE_THRESHOLD

@@ -1,4 +1,6 @@
 from collections.abc import Generator
+from os import PathLike
+from pathlib import Path
 import sys
 
 import textual
@@ -44,10 +46,18 @@ class Interface(App):
     }
     """
 
-    def __init__(self, embedding_model: EmbeddingModel, language_model: LanguageModel):
+    def __init__(
+        self,
+        source: PathLike,
+        embedding_model: EmbeddingModel,
+        language_model: LanguageModel,
+    ):
         super().__init__()
+        self.source = source
         self.convo = Conversation(
-            embedding_model=embedding_model, language_model=language_model
+            Path(self.source).name,
+            embedding_model=embedding_model,
+            language_model=language_model,
         )
         self.chat_history = ChatHistory()
         self.chat_input = ChatInput()
@@ -66,7 +76,7 @@ class Interface(App):
     @textual.work(thread=True)
     async def prepare(self) -> None:
         """Finish initializing the application in a separate thread."""
-        self.convo.load_dataset("cats.txt")
+        self.convo.load_dataset(self.source)
         self.call_from_thread(self.pop_screen)
 
     def compose(self) -> ComposeResult:
@@ -84,7 +94,7 @@ class Interface(App):
         self.chat_history.add_message("Agent", response)
         self.chat_input.loading = False
 
-    @textual.work(thread=True)
+    @textual.work(thread=True, exclusive=True)
     async def response(self, query: str) -> Generator[str, None, None]:
         """Get the response to a `query` in a separate thread."""
         identifier = self.call_from_thread(

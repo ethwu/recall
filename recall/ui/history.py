@@ -52,7 +52,7 @@ class Message(Markdown):
 
 
 class Prompt(Message):
-    pass
+    BORDER_TITLE = "You"
 
 
 class Response(Message):

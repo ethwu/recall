@@ -1,4 +1,5 @@
 from collections.abc import Generator, Iterable
+import itertools
 from os import PathLike
 from pathlib import Path
 from typing import Self, override
@@ -23,10 +24,26 @@ def load_dataset(source: PathLike) -> Generator[Document]:
 
 
 class ChromaVectorDb(BaseVectorDb):
-    def __init__(self, model: EmbeddingModel) -> None:
+    def __init__(self, identifier: str, model: EmbeddingModel) -> None:
+        self.identifier = identifier
         self.cnx: Client
         self.vectors: Collection
         self.embedding_function = OllamaEmbeddingFunction(model)
+
+    def with_dir(self, path: PathLike) -> Self:
+        self.__enter__()
+        path = Path(path)
+        documents = {}
+        for document in path.glob("**/*.md"):
+            with open(document, "r") as f:
+                if not self.vectors.get(ids=[document.name], limit=1, include=["uris"])["uris"]:
+                    documents[document.name] = f.read()
+        if documents:
+            self.vectors.add(
+                documents=list(doc for doc in documents.values()),
+                ids=list(title for title in documents.keys()),
+            )
+        return self
 
     # @override
     @classmethod
@@ -38,7 +55,9 @@ class ChromaVectorDb(BaseVectorDb):
 
     @override
     def __enter__(self) -> Self:
-        self.cnx = PersistentClient(path=str(Path(".", "recall.chroma")))
+        self.cnx = PersistentClient(
+            path=str(Path(".", self.identifier).with_suffix(".chroma"))
+        )
         self.vectors = self.cnx.get_or_create_collection(
             "corpus", embedding_function=self.embedding_function
         )

@@ -2,5 +2,9 @@
 python = "3.13"
 uv = "latest"
 
+[tasks.build]
+run = "uv run -m nuitka --standalone ../recall"
+dir = "build/"
+
 [env]
 _.python.venv = '.venv'

@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "chromadb>=0.6.3",
+    "langchain>=0.3.20",
     "loguru>=0.7.3",
     "numpy>=2.2.3",
     "ollama>=0.4.7",
@@ -17,3 +19,12 @@ dev = ["ruff>=0.9.10", "textual-dev>=1.7.0"]
 
 [tool.ruff]
 target-version = "py313"
+
+[tool.ruff.lint.extend-per-file-ignores]
+"__init__.py" = [
+    ## pydocstyle ##
+    "D104", # undocumented-public-package
+
+    ## pyflakes ##
+    "F401", # unused-import
+]

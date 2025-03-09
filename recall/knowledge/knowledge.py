@@ -1,27 +1,23 @@
-from collections.abc import Callable, Generator, Iterable
+from __future__ import annotations
+
+from collections.abc import Callable, Generator
 from os import PathLike
 from pathlib import Path
 import pickle
 from pickle import PickleError
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ollama
 from ollama import Message
 from loguru import logger
 
-Dataset = Iterable[str]
+from recall.knowledge.vectors import VectorDb
 
-Chunk = str
-Embedding = list[float]
+if TYPE_CHECKING:
+    from recall.knowledge.types import Chunk, Dataset, Embedding
 
-Vector = tuple[Chunk, Embedding]
-
-
-def cosine_similarity(a, b):
-    dot_product = sum([x * y for x, y in zip(a, b)])
-    norm_a = sum([x**2 for x in a]) ** 0.5
-    norm_b = sum([x**2 for x in b]) ** 0.5
-    return dot_product / (norm_a * norm_b)
+HISTORY_SIZE_THRESHOLD = 128
+RETAIN_EXCHANGES = 12
 
 
 def pack(path: Path, o: Any) -> None:
@@ -39,7 +35,7 @@ def unpack_or_load[T](path: Path | PathLike, callback: Callable[[Path], T]) -> T
             with pickled_path.open("rb") as f:
                 r = pickle.load(f)
                 return r
-        except (EOFError, IOError, PickleError) as e:
+        except Exception as e:
             logger.error("Could not load {}; recreating data: {}", pickled_path, e)
     obj = callback(path)
     pack(path, obj)
@@ -61,54 +57,17 @@ class Conversation:
         embedding_model: str,
         language_model: str,
     ):
-        self.vector_db: dict[Chunk, Embedding] = {}
+        self.vector_db: VectorDb
         self.embedding_model = embedding_model
         self.language_model = language_model
 
         self.context: list[Message] = unpack_or_load("history", lambda _path: [])
         self.messageno = 0
 
-    def embedding(self, text: str) -> Embedding:
-        """Get an embedding for the given text."""
-        logger.debug("Generating an embedding for {!r}.", text)
-        embedding = ollama.embed(model=self.embedding_model, input=text)
-        logger.debug("Got {!r}", embedding.embeddings)
-        return (
-            []
-            if embedding is None or "embeddings" not in embedding
-            else embedding["embeddings"][0]
-        )
-
     def load_dataset(self, dataset_path: PathLike):
         """Load the given dataset."""
-
-        def load(dataset_path: PathLike):
-            dataset = load_dataset(dataset_path)
-            dataset_length = len(dataset)
-            vector_db = {}
-            for i, chunk in enumerate(dataset):
-                vector_db[chunk] = self.embedding(chunk)
-                logger.info(
-                    "Added chunk {} of {} to the database.", i + 1, dataset_length
-                )
-            return vector_db
-
-        logger.info("Loading dataset from {!r}.", dataset_path)
-        self.vector_db = unpack_or_load(Path(dataset_path), load)
+        self.vector_db = VectorDb.from_path(dataset_path, self.embedding_model)
         logger.info("Vector database loaded.")
-
-    def retrieve(self, query: str, count: int = 3):
-        """Get the response for the given query."""
-        # Get the embedding for the query.
-        query = self.embedding(query)
-        logger.info("{}", len(self.vector_db))
-        logger.debug("Got embedding {!r}", query)
-        similarities = [
-            (chunk, cosine_similarity(query, embedding))
-            for chunk, embedding in self.vector_db.items()
-        ]
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        return similarities[:count]
 
     def ask(self, question: str) -> Generator[str, None, None]:
         """Get the answer to the given question."""
@@ -117,18 +76,16 @@ class Conversation:
         question_message = Message(role="user", content=question)
         self.context.append(question_message)
 
-        knowledge = self.retrieve(question)
+        knowledge = list(self.vector_db.query(question, n=3))
         logger.debug(
             "Retrieved knowledge:\n{}",
-            "\n".join(
-                "- (similarity: {:.2f}) {}".format(similarity, chunk)
-                for chunk, similarity in knowledge
-            ),
+            "\n".join(f"- ({similarity}) {chunk}" for chunk, similarity in knowledge),
         )
         instructions = (
-            "You are an unbiased assistant. "
-            "Respond to the question using this context. "
+            "You are an unbiased research assistant. "
+            "Respond to the question using the following context. "
             "Do not make up any new information: "
+            # ) + "\n".join([f" - {chunk}" for chunk in knowledge])
         ) + "\n".join([f" - {chunk}" for chunk, _similarity in knowledge])
         logger.debug("Submitting request.")
         stream = ollama.chat(
@@ -147,9 +104,9 @@ class Conversation:
             yield chunk.message.content
         self.context.append(Message(role="assistant", content=response))
         self.messageno += 1
-        if self.messageno > 3:
+        if self.messageno > HISTORY_SIZE_THRESHOLD:
             self.compact_history()
-            self.messageno %= 3
+            self.messageno %= HISTORY_SIZE_THRESHOLD
 
     def compact_history(self):
         """Compact the history."""
@@ -170,12 +127,13 @@ class Conversation:
         )
         compacted.message.role = "system"
         self.context = [
+            *self.context[-RETAIN_EXCHANGES * 2 :],
             Message(
                 role="system",
                 content="You may reference this summary of the history of this conversation:",
             ),
             compacted.message,
         ]
-        logger.info("Compacted history:\n{}", compacted.message.content)
+        logger.info("Compacted history:\n{!r}", self.context)
         # Pack the context for future reference.
         pack("history", self.context)

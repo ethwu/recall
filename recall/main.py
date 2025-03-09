@@ -28,7 +28,7 @@ def chat(
     """Run the chat."""
     logger.remove()
     if not quiet:
-        logger.add("recall.log")
+        logger.add("recall.log", rotation="1 MB", retention="10 days")
     interface = Interface(
         embedding_model=embedding_model, language_model=language_model
     )

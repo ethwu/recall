@@ -4,5 +4,5 @@ set shell := ['mise', 'exec', '--', 'sh', '-c']
 main := 'recall'
 
 run:
-	uv run -m {{main}}
+	ollama serve > /dev/null 2>&1 & uv run -m {{main}}
 

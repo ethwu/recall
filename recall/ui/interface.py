@@ -1,7 +1,9 @@
+from collections.abc import Generator
+
 import textual
 from textual.app import App, ComposeResult
 from textual.screen import Screen
-from textual.widgets import Markdown, Input, LoadingIndicator
+from textual.widgets import Input, LoadingIndicator, Markdown
 
 from recall import knowledge
 from recall.knowledge import Conversation
@@ -37,6 +39,7 @@ class Interface(App):
         self.install_screen(LoadingScreen(), name="loading")
         self.push_screen("loading")
         self.prepare()
+        self.set_focus(self.chat_input)
 
     @textual.work(thread=True)
     async def prepare(self) -> None:
@@ -58,6 +61,12 @@ class Interface(App):
         self.chat_input.loading = False
 
     @textual.work(thread=True)
-    def response(self, query: str) -> str:
+    async def response(self, query: str) -> Generator[str, None, None]:
         """Get the response to a `query` in a separate thread."""
-        return self.convo.ask(query)
+        identifier = self.call_from_thread(
+            lambda: self.chat_history.add_message("Agent")
+        )
+        for chunk in self.convo.ask(query):
+            self.call_from_thread(
+                lambda: self.chat_history.update_message(identifier, chunk)
+            )
